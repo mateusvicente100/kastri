@@ -1,62 +1,117 @@
-# Barcode reader demo
+# Barcode Reader Demo
 
 ## Description
 
-This demonstrates the use of the [Google MLVision API to scan barcodes](https://developers.google.com/ml-kit/vision/barcode-scanning/android). 
+This project demonstrates how to use the [Google MLVision API](https://developers.google.com/ml-kit/vision/barcode-scanning/android) to scan barcodes.
 
-~~The demo uses a TakePhotoFromCameraAction to capture the image - the code the processes the image to detect barcodes could possibly use images captured "on-the-fly" through video capture.~~
+## Supported Delphi Versions
 
-**UPDATE: Due to improvements in TCameraComponent for Android, the demo now uses that for "on-the-fly" detection**
+- **Delphi 12.x**
+- **Delphi 11.3** (limited support)
 
-## Supported Delphi versions
+## Project Configuration
 
-Delphi 12, Delphi 11.x. It _should_ also work in Delphi 10.4.2, and perhaps earlier.
+Follow these instructions to configure your own project. The demo project has already been preconfigured.
 
-## Android 
+### Android
 
-### Vision libraries
+#### Vision Libraries
 
-The following jar files are used by the project:
+The following JAR files are required for the project:
 
-* play-services-vision-17.0.2.jar
-* play-services-vision-common-17.0.2.jar
+- `play-services-vision-17.0.2.jar`
+- `play-services-vision-common-17.0.2.jar`
 
-Both are located in the [`ThirdParty\Android`](https://github.com/DelphiWorlds/Kastri/tree/master/ThirdParty/Android) folder
+These files are located in the [`ThirdParty\Android`](https://github.com/DelphiWorlds/Kastri/tree/master/ThirdParty/Android) folder.
 
-If you are creating a new project (i.e. other than the demo) you will need to add these jars to the `Libraries` node under the Android platform in Project Manager
+Add these JAR files to the **Libraries** node under the Android 32-bit platform in Project Manager.
 
-**Note**:
+**Note**: 
 
-Due to a bug in Delphi 11.3 **ONLY**, if you need to compile for Android 64-bit, you will either need to apply [this workaround](https://docs.code-kungfu.com/books/hotfix-113-alexandria/page/fix-jar-libraries-added-to-android-64-bit-platform-target-are-not-compiled) (which will apply to **all** projects), **OR** copy the jar file(s) to _another folder_, and add them to the Libraries node of the Android 64-bit target. (Adding the same `.jar` file(s) to Android 64-bit does _not_ work)
+For **Delphi 11.3 only**, there is a known issue when compiling for Android 64-bit. To resolve this:
+1. Apply [this workaround](https://docs.code-kungfu.com/books/hotfix-113-alexandria/page/fix-jar-libraries-added-to-android-64-bit-platform-target-are-not-compiled), which affects all projects.
+2. **OR** copy the JAR files to a different folder and add them to the Libraries node of the Android 64-bit target (adding the same JAR files to both platforms does not work).
 
-### Manifest
+#### Manifest Configuration
 
-You will also need to modify `AndroidManifest.template.xml` - under `<%application-meta-data%>`, add this line:
+Modify `AndroidManifest.template.xml` by adding the following line under `<%application-meta-data%>`:
 
 ```xml
 <meta-data android:name="com.google.android.gms.version" android:value="12451000" />
 ```
 
-## iOS
+### iOS
 
-If you are combining the Barcode Reader feature with other features dependent on Firebase (such as the FCM demo), add a conditional define of `FIREBASE` in the Delphi Compiler section of the Project Options:
+#### Firebase iOS SDK
 
-<img src="./Screenshots/FirebaseConditionalDefine.png" alt="logo" height="150">
+The Firebase iOS SDK version you use depends on your Delphi version:
 
-The demo is dependent on prebuilt libraries in the [`ThirdParty\iOS`](https://github.com/DelphiWorlds/Kastri/tree/master/ThirdParty/iOS) folder
+- **Delphi 12.2**: [Firebase iOS SDK 11.2.0](https://github.com/firebase/firebase-ios-sdk/releases/download/11.2.0/Firebase.zip)
+- **Delphi 12.1 and earlier**: [Firebase iOS SDK 10.8.0](https://github.com/firebase/firebase-ios-sdk/releases/download/10.8.0/Firebase-10.8.0.zip)
 
-The MLKitBarcodeScanning framework is over 100MB, so it has been zipped (`MLKitBarcodeScanning.framework.zip`). **It will need to be unzipped in place, in order for the app to compile**
+Unzip the SDK to a folder accessible to your projects. Ideally, use a common folder for multiple projects.
 
-If you are creating a new project (i.e. other than the demo) in the Project Options, you will need to add the path to the: 
+**Note**:
+- If combining with [Firebase Cloud Messaging (Kastri)](https://github.com/DelphiWorlds/Kastri/tree/master/Demos/FCMRebooted), you must use **Firebase iOS SDK 10.8.0** due to library conflicts.
+- For **Firebase iOS SDK 11.2.0**, set the minimum iOS version to **12.0** (see [Linker Options](#linker-options)).
 
-* Framework search path, and:
-* Search path
+Set an [Environment Variable User System Override](https://docwiki.embarcadero.com/RADStudio/Alexandria/en/Environment_Variables) named `Firebase`, pointing to the folder where the SDK is unzipped. This corresponds to the `$(Firebase)` macro in the Project Options. Alternatively, modify the [Framework Search Path](#framework-search-path) to point to the SDK folder.
 
-..and ensure you have a value of: `-ObjC` for the `Options passed to the LD linker` option:
+#### Swift Compatibility Libraries
 
-<img src="./Screenshots/ObjCLinkerOption.png" alt="ObjC linker option" height="400">
+If using Firebase iOS SDK 11.2.0, you must add [Swift Support Files](https://github.com/DelphiWorlds/HowTo/tree/main/Solutions/AddSwiftSupport) via Delphi's SDK Manager.
 
-<br>
+#### ML Kit Libraries
 
-<img src="./Screenshots/BarcodeScanExample.png" alt="logo" height="1200">
+The Barcode Scanner feature depends on prebuilt libraries located in the [`ThirdParty\iOS`](https://github.com/DelphiWorlds/Kastri/tree/master/ThirdParty/iOS) folder.
 
+The `MLKitBarcodeScanning.framework` is over 100MB and is zipped (`MLKitBarcodeScanning.framework.zip`). **Unzip it in place** to allow the app to compile.
+
+#### Conditional Defines
+
+For projects combining Barcode Reader and Firebase features (e.g., [Kastri FCM](https://github.com/DelphiWorlds/Kastri/tree/master/Demos/FCMRebooted)), add a `FIREBASE` conditional define in the Delphi Compiler section of Project Options:
+
+<img src="./Screenshots/FirebaseConditionalDefine.png" alt="Firebase Conditional Define" height="150">
+
+#### Framework Search Path
+
+Ensure the Framework Search Path includes:
+
+- The `ThirdParty\iOS` folder for ML Kit frameworks
+- Framework folders in the Firebase iOS SDK
+
+Example value in the demo:
+
+```
+..\..\ThirdParty\iOS;$(Firebase)\FirebaseAnalytics\FBLPromises.xcframework\ios-arm64;$(Firebase)\FirebaseAnalytics\nanoPB.xcframework\ios-arm64;$(Firebase)\FirebaseMessaging\GoogleDataTransport.xcframework\ios-arm64;$(Firebase)\GoogleSignIn\GTMSessionFetcher.xcframework\ios-arm64
+```
+
+#### Project Search Path
+
+Ensure the Search Path includes:
+
+- The `ThirdParty\iOS` folder for additional ML Kit binaries
+- Dependent Kastri code paths
+
+Example value in the demo:
+
+```
+..\..\ThirdParty\iOS;..\..\API;..\..\Core;..\..\Include;..\..\Features\Barcode
+```
+
+#### Linker Options
+
+For **Firebase iOS SDK 11.2.0** (Delphi 12.2 or later):
+- Set the **Minimum iOS version supported** to: `12.0`.
+
+For **Options passed to the LD linker** for iOS Device 64-bit, use:
+
+```
+-ObjC -rpath /usr/lib/swift -weak_library /usr/lib/swift/libswift_Concurrency.dylib -weak_library /usr/lib/swift/libswift_StringProcessing.dylib -weak_library /usr/lib/swift/libswiftDataDetection.dylib -weak_library /usr/lib/swift/libswiftFileProvider.dylib -weak_library /usr/lib/swift/libswiftOSLog.dylib -weak_library /usr/lib/swift/libswiftXPC.dylib
+```
+
+These `-weak_library` entries ensure compatibility with iOS 15 or lower.
+
+## Example Scan Result
+
+<img src="./Screenshots/BarcodeScanExample.png" alt="Barcode Scan Example" height="1200">

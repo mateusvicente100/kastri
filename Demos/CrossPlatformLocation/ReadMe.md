@@ -27,31 +27,11 @@ When building the application, please ensure that the Target Platform for **both
 
 ### Build Event/Android Manifest
 
-**Delphi 12.x**
+**Delphi 12.1 ONLY**
 
-* Deploy the project *at least once* - this will create `AndroidManifest.template.xml`
-* Modify `AndroidManifest.template.xml` to add *after* `<%application-meta-data%>`
+Please see [this link](../../Delphi12.1.AndroidManifestIssue.md).
 
-  ```
-    <meta-data android:name="DWMultiBroadcastReceiver.KEY_START_SERVICE_ON_BOOT" android:value="CrossPlatformLocationService" />
-    <meta-data android:name="com.google.android.gms.version" android:value="12451000" />
-  ```
-  ..add *before* `<%receivers%>`
-  ```
-    <receiver
-      android:name="com.delphiworlds.kastri.DWMultiBroadcastReceiver"
-      android:exported="true">
-        <intent-filter>
-            <action android:name="com.delphiworlds.kastri.DWMultiBroadcastReceiver.ACTION_ALARM_TIMER" />
-            <action android:name="com.delphiworlds.kastri.DWMultiBroadcastReceiver.ACTION_SERVICE_ALARM" />
-            <action android:name="com.delphiworlds.kastri.DWMultiBroadcastReceiver.ACTION_SERVICE_RESTART" />
-            <action android:name="android.intent.action.BOOT_COMPLETED"/>
-            <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-        </intent-filter>
-    </receiver>
-  ```
-
-**Delphi 11.x**
+**Delphi 12.0 and 11.x**
 
 When configuring your **own** project for Android, configure Build Events in Project Options to add a Post-Build event with the command:  
 
@@ -65,7 +45,7 @@ Where `[kastri]` is the path to the Kastri library. Do this for each required An
 Please ensure that the following permissions are checked in the Project Options:
 
 * Foreground service
-* Foreground servuce location (Delphi 12.x)
+* Foreground service location (Delphi 12.x)
 * Access background location (Dangerous permissions, Delphi 11.x and up)
 * Access coarse location (Dangerous permissions)
 * Access fine location (Dangerous permissions)
@@ -73,8 +53,6 @@ Please ensure that the following permissions are checked in the Project Options:
 ## iOS
 
 On iOS, the main thing to be aware of is that the `UIBackgroundModes` values in the Version Info of the Project Options needs to include `location`
-  
-**Note:** For Delphi 10.4 and 10.4.1 users, if you wish to use location services on iOS, **you will need to [patch the System.iOS.Sensors unit as per this report](https://quality.embarcadero.com/browse/RSP-29859?focusedCommentId=85109&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-85109)**, in order for it to work properly. This has been fixed in Delphi 10.4.2, and highlights why **developers should stay current with the version of Delphi**
 
 ## Using the demo code in your own project
 

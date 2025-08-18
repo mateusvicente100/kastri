@@ -17,9 +17,9 @@ uses
   // macOS
   Macapi.ObjectiveC,
   // iOS
-  iOSapi.UIKit, iOSapi.Foundation,
+  iOSapi.Foundation,
   // DW
-  DW.iOSapi.GoogleMobileAds, DW.AdMob, DW.AdMobAds;
+  DW.iOSapi.UIKit, DW.iOSapi.GoogleMobileAds, DW.AdMob, DW.AdMobAds;
 
 type
   TOpenCustomPlatformFullScreenAd = class(TCustomPlatformFullScreenAd);
@@ -49,6 +49,7 @@ type
    protected
     procedure DoAdDismissedFullScreenContent; override;
     procedure DoLoad; override;
+    procedure DoShow; override;
   public
     constructor Create(const AInterstitialAd: TInterstitialAd); override;
     destructor Destroy; override;
@@ -64,6 +65,7 @@ type
   protected
     procedure DoAdDismissedFullScreenContent; override;
     procedure DoLoad; override;
+    procedure DoShow; override;
   public
     constructor Create(const ARewardedAd: TRewardedAd); override;
     destructor Destroy; override;
@@ -80,6 +82,7 @@ type
   protected
     procedure DoAdDismissedFullScreenContent; override;
     procedure DoLoad; override;
+    procedure DoShow; override;
   public
     constructor Create(const ARewardedInterstitialAd: TRewardedInterstitialAd); override;
     destructor Destroy; override;
@@ -119,6 +122,11 @@ type
     class function GetAdError(const AError: NSError): TADError; static;
     class function GetAdReward(const AReward: GADAdReward): TADReward; static;
   end;
+
+function SharedApplication: UIApplication;
+begin
+  Result := TUIApplication.OCClass.sharedApplication;
+end;
 
 { TGADHelper }
 
@@ -208,7 +216,6 @@ begin
     FAd.setFullScreenContentDelegate(FDelegate.GetObjectID);
     FAd.setPaidEventHandler(PaidEventHandler);
     DoAdLoaded;
-    FAd.presentFromRootViewController(TiOSHelper.SharedApplication.keyWindow.rootViewController);
   end
   else
   begin
@@ -228,6 +235,12 @@ end;
 procedure TPlatformInterstitialAd.DoLoad;
 begin
   TGADInterstitialAd.OCClass.loadWithAdUnitID(StrToNSStr(AdUnitID), TGADHelper.GetRequest, AdLoadCompletionHandler);
+end;
+
+procedure TPlatformInterstitialAd.DoShow;
+begin
+  if FAd <> nil then
+    FAd.presentFromRootViewController(SharedApplication.keyWindow.rootViewController);
 end;
 
 procedure TPlatformInterstitialAd.PaidEventHandler(value: GADAdValue);
@@ -259,7 +272,6 @@ begin
     FAd.setFullScreenContentDelegate(FDelegate.GetObjectID);
     FAd.setPaidEventHandler(PaidEventHandler);
     DoAdLoaded;
-    FAd.presentFromRootViewController(TiOSHelper.SharedApplication.keyWindow.rootViewController, UserDidEarnRewardHandler);
   end
   else
     DoAdFailedToLoad(TGADHelper.GetAdError(error));
@@ -275,6 +287,12 @@ end;
 procedure TPlatformRewardedAd.DoLoad;
 begin
   TGADRewardedAd.OCClass.loadWithAdUnitID(StrToNSStr(AdUnitID), TGADHelper.GetRequest, AdLoadCompletionHandler);
+end;
+
+procedure TPlatformRewardedAd.DoShow;
+begin
+  if FAd <> nil then
+    FAd.presentFromRootViewController(SharedApplication.keyWindow.rootViewController, UserDidEarnRewardHandler);
 end;
 
 procedure TPlatformRewardedAd.PaidEventHandler(value: GADAdValue);
@@ -318,7 +336,6 @@ begin
     FAd.setFullScreenContentDelegate(FDelegate.GetObjectID);
     FAd.setPaidEventHandler(PaidEventHandler);
     DoAdLoaded;
-    FAd.presentFromRootViewController(TiOSHelper.SharedApplication.keyWindow.rootViewController, UserDidEarnRewardHandler);
   end
   else
     DoAdFailedToLoad(TGADHelper.GetAdError(error));
@@ -327,6 +344,12 @@ end;
 procedure TPlatformRewardedInterstitialAd.DoLoad;
 begin
   LoadAd;
+end;
+
+procedure TPlatformRewardedInterstitialAd.DoShow;
+begin
+  if FAd <> nil then
+    FAd.presentFromRootViewController(SharedApplication.keyWindow.rootViewController, UserDidEarnRewardHandler);
 end;
 
 procedure TPlatformRewardedInterstitialAd.LoadAd;
@@ -409,7 +432,7 @@ end;
 procedure TPlatformAppOpenAd.ShowAdIfAvailable(const ACanShow: Boolean);
 begin
   if (FAd <> nil) and ACanShow then // and load time was less than 4 hours ago??
-    FAd.presentFromRootViewController(TiOSHelper.SharedApplication.keyWindow.rootViewController)
+    FAd.presentFromRootViewController(SharedApplication.keyWindow.rootViewController)
   else if FAd = nil then
     LoadAd;
 end;

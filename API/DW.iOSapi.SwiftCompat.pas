@@ -19,10 +19,19 @@ interface
 
 implementation
 
+{$IF Defined(IOSSIMULATOR)}
+procedure libswiftCompatibility50Loader; cdecl; external '/usr/lib/swift/iphonesimulator/libswiftCompatibility50.a';
+procedure libswiftCompatibility51Loader; cdecl; external '/usr/lib/swift/iphonesimulator/libswiftCompatibility51.a';
+procedure libswiftCompatibility56Loader; cdecl; external '/usr/lib/swift/iphonesimulator/libswiftCompatibility56.a';
+procedure libswiftCompatibilityConcurrencyLoader; cdecl; external '/usr/lib/swift/iphonesimulator/libswiftCompatibilityConcurrency.a';
+procedure libswiftCompatibilityDynamicReplacementsLoader; cdecl; external '/usr/lib/swift/iphonesimulator/libswiftCompatibilityDynamicReplacements.a';
+{$ELSE}
 procedure libswiftCompatibility50Loader; cdecl; external '/usr/lib/swift/iphoneos/libswiftCompatibility50.a';
 procedure libswiftCompatibility51Loader; cdecl; external '/usr/lib/swift/iphoneos/libswiftCompatibility51.a';
+procedure libswiftCompatibility56Loader; cdecl; external '/usr/lib/swift/iphoneos/libswiftCompatibility56.a';
 procedure libswiftCompatibilityConcurrencyLoader; cdecl; external '/usr/lib/swift/iphoneos/libswiftCompatibilityConcurrency.a';
 procedure libswiftCompatibilityDynamicReplacementsLoader; cdecl; external '/usr/lib/swift/iphoneos/libswiftCompatibilityDynamicReplacements.a';
+{$ENDIF}
 procedure libswift_Concurrency; cdecl; external '/usr/lib/swift/libswift_Concurrency.dylib';
 procedure libswift_StringProcessingLoader; cdecl; external '/usr/lib/swift/libswift_StringProcessing.dylib';
 procedure libswiftCoreLoader; cdecl; external '/usr/lib/swift/libswiftCore.dylib';
@@ -36,7 +45,11 @@ procedure libswiftFileProviderLoader; cdecl; external '/usr/lib/swift/libswiftFi
 procedure libswiftFoundationLoader; cdecl; external '/usr/lib/swift/libswiftFoundation.dylib';
 procedure libswiftMetalLoader; cdecl; external '/usr/lib/swift/libswiftMetal.dylib';
 procedure libswiftObjectiveCLoader; cdecl; external '/usr/lib/swift/libswiftObjectiveC.dylib';
+procedure libswiftosLoader; cdecl; external '/usr/lib/swift/libswiftos.dylib';
+procedure libswiftOSLogLoader; cdecl; external '/usr/lib/swift/libswiftOSLog.dylib';
 procedure libswiftQuartzCoreLoader; cdecl; external '/usr/lib/swift/libswiftQuartzCore.dylib';
 procedure libswiftUIKitLoader; cdecl; external '/usr/lib/swift/libswiftUIKit.dylib';
+procedure libswiftUniformTypeIdentifiersLoader; cdecl; external '/usr/lib/swift/libswiftUniformTypeIdentifiers.dylib';
+procedure libswiftXPCLoader; cdecl; external '/usr/lib/swift/libswiftXPC.dylib';
 
 end.

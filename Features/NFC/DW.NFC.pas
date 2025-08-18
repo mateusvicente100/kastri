@@ -15,6 +15,9 @@ interface
 
 {$SCOPEDENUMS ON}
 
+uses
+  System.Classes;
+
 type
   TNFCPayloadTypeNameFormat = (Empty, NFCWellKnown, Media, AbsoluteURI, NFCExternal, Unknown, Unchanged);
 
@@ -52,6 +55,24 @@ type
     Messages: TNFCMessages;
   end;
 
+  TNDEFStatus = (NotSupported, ReadOnly, ReadWrite, Unknown);
+
+  TConnectTagCompletionProc = reference to procedure(const Error: string);
+  TQueryStatusCompletionProc = reference to procedure(const Status: TNDEFStatus; const Capacity: LongWord; const Error: string);
+  TReadCompletionProc = reference to procedure(const Msg: TNFCMessage; const Error: string);
+  TWriteCompletionProc = reference to procedure(const Error: string);
+
+  INDEFTag = interface(IInterface)
+    ['{90FAB641-D280-40DE-A3F9-BC7D3516D0DD}']
+    procedure Connect(const AHandler: TConnectTagCompletionProc);
+    function IsAvailable: Boolean;
+    procedure QueryStatus(const AHandler: TQueryStatusCompletionProc);
+    procedure Read(const AHandler: TReadCompletionProc);
+    procedure Write(const AMessage: TNFCMessage; const AHandler: TWriteCompletionProc);
+  end;
+
+  TNDEFTags = TArray<INDEFTag>;
+
   TNFCReader = class;
 
   TCustomPlatformNFCReader = class(TObject)
@@ -60,8 +81,10 @@ type
     FNFCReader: TNFCReader;
   protected
     procedure BeginSession; virtual; abstract;
-    procedure DoResult(const ANFCResult: TNFCResult);
+    procedure DoDetectedTags(const ATags: TNDEFTags);
     procedure DoError(const AError: string);
+    procedure DoResult(const ANFCResult: TNFCResult);
+    procedure DoSessionBecameActive;
     procedure EndSession; virtual; abstract;
     property IsActive: Boolean read FIsActive write FIsActive;
     property NFCReader: TNFCReader read FNFCReader;
@@ -72,19 +95,24 @@ type
     destructor Destroy; override;
   end;
 
-  TNFCResultEvent = procedure(Sender: TObject; const NFCResult: TNFCResult) of object;
   TNFCErrorEvent = procedure(Sender: TObject; const Error: string) of object;
+  TNFCResultEvent = procedure(Sender: TObject; const NFCResult: TNFCResult) of object;
+  TNFCDetectedTagsEvent = procedure(Sender: TObject; const Tags: TNDEFTags) of object;
 
   TNFCReader = class(TObject)
   private
     FAlertMessage: string;
     FPlatformNFCReader: TCustomPlatformNFCReader;
-    FOnResult: TNFCResultEvent;
+    FOnBecameActive: TNotifyEvent;
+    FOnDetectedTags: TNFCDetectedTagsEvent;
     FOnError: TNFCErrorEvent;
+    FOnResult: TNFCResultEvent;
     function GetIsActive: Boolean;
   protected
-    procedure DoResult(const ANFCResult: TNFCResult);
     procedure DoError(const AError: string);
+    procedure DoDetectedTags(const ATags: TNDEFTags);
+    procedure DoResult(const ANFCResult: TNFCResult);
+    procedure DoSessionBecameActive;
   public
     constructor Create;
     destructor Destroy; override;
@@ -92,8 +120,10 @@ type
     procedure EndSession;
     property AlertMessage: string read FAlertMessage write FAlertMessage;
     property IsActive: Boolean read GetIsActive;
-    property OnResult: TNFCResultEvent read FOnResult write FOnResult;
+    property OnBecameActive: TNotifyEvent read FOnBecameActive write FOnBecameActive;
+    property OnDetectedTags: TNFCDetectedTagsEvent read FOnDetectedTags write FOnDetectedTags;
     property OnError: TNFCErrorEvent read FOnError write FOnError;
+    property OnResult: TNFCResultEvent read FOnResult write FOnResult;
   end;
 
 implementation
@@ -146,6 +176,16 @@ begin
   FNFCReader.DoResult(ANFCResult);
 end;
 
+procedure TCustomPlatformNFCReader.DoSessionBecameActive;
+begin
+  FNFCReader.DoSessionBecameActive;
+end;
+
+procedure TCustomPlatformNFCReader.DoDetectedTags(const ATags: TNDEFTags);
+begin
+  FNFCReader.DoDetectedTags(ATags);
+end;
+
 procedure TCustomPlatformNFCReader.DoError(const AError: string);
 begin
   FNFCReader.DoError(AError);
@@ -177,6 +217,18 @@ procedure TNFCReader.DoResult(const ANFCResult: TNFCResult);
 begin
   if Assigned(FOnResult) then
     FOnResult(Self, ANFCResult);
+end;
+
+procedure TNFCReader.DoSessionBecameActive;
+begin
+  if Assigned(FOnBecameActive) then
+    FOnBecameActive(Self);
+end;
+
+procedure TNFCReader.DoDetectedTags(const ATags: TNDEFTags);
+begin
+  if Assigned(FOnDetectedTags) then
+    FOnDetectedTags(Self, ATags);
 end;
 
 procedure TNFCReader.DoError(const AError: string);

@@ -25,6 +25,7 @@ type
   public
     class function ContainsKey(const AKey: string): Boolean; static;
     class function GetValue(const AKey: string; var AValue: string): Boolean; overload; static;
+    class function GetValue(const AKey: string; var AValue: Integer): Boolean; overload; static;
     class function GetValue(const AKey: string; var AValue: Int64): Boolean; overload; static;
   end;
 
@@ -48,9 +49,16 @@ begin
   Result := FMetadata;
 end;
 
+class function TPlatformOSMetadata.GetValue(const AKey: string; var AValue: Integer): Boolean;
+begin
+  Result := ContainsKey(AKey);
+  if Result then
+    AValue := GetMetadata.getInt(StringToJString(AKey));
+end;
+
 class function TPlatformOSMetadata.ContainsKey(const AKey: string): Boolean;
 begin
-  Result := GetMetadata.containsKey(StringToJString(AKey));
+  Result := (GetMetadata <> nil) and GetMetadata.containsKey(StringToJString(AKey));
 end;
 
 class function TPlatformOSMetadata.GetValue(const AKey: string; var AValue: string): Boolean;

@@ -11,56 +11,54 @@ Please refer to the demo as a guide on how to use `TAppUpdate`.
 
 ## Supported Delphi versions
 
-Delphi 12, Delphi 11.x. It _should_ also work in Delphi 10.4.2, and perhaps earlier.
+Delphi 12.2 and 12.3, and possibly earlier versions
 
 ## Project Configuration
 
-These are instructions for configuring your own project to use the App Update feature
+These are instructions for configuring your own project to use the App Update feature. They have already been done for the demo.
 
 ### Android libraries
 
-This feature is dependent on the Play Core library, which does not ship with Delphi. Add `play-core-1.10.0.jar` from the `ThirdParty\Android` folder in Kastri to the Libraries node of the Android 32-bit target in Project Manager.
+This feature is dependent on the Play Services App Update library and a dependent library, which do not ship with Delphi. Add:
 
-**Note**:
+* `app-update-2.1.0.jar` 
+* `play-core-common-2.0.3.jar` 
+  
+from the `ThirdParty\Android` folder in Kastri to the Libraries node of the Android 32-bit target in Project Manager.
 
-Due to a bug in Delphi 11.3 **ONLY**, if you need to compile for Android 64-bit, you will either need to apply [this workaround](https://docs.code-kungfu.com/books/hotfix-113-alexandria/page/fix-jar-libraries-added-to-android-64-bit-platform-target-are-not-compiled) (which will apply to **all** projects), **OR** copy the jar file(s) to _another folder_, and add them to the Libraries node of the Android 64-bit target. (Adding the same `.jar` file(s) to Android 64-bit does _not_ work)
+### Android Manifest/Deployment
 
-### Build Event/Android Manifest
+Steps:
 
-**Delphi 12.1:**
-
-Due to changes in the Android build process:
-
-* **Remove** the Build Events in Project Options for Android 32-bit and Android 64-bit 
-* Deploy the project *at least once* - this will create `AndroidManifest.template.xml`
-* Modify `AndroidManifest.template.xml` to add *before* the terminating application tag, i.e. `</application>`
-
-  ```
+1. Deploy the project *at least once* - this will create the required manifest template and styles files
+2. Modify `AndroidManifest.template.xml` to add *before* `<%activity%>`
+   ```
     <activity android:name="com.google.android.play.core.common.PlayCoreDialogWrapperActivity"
-        android:enabled="false"
-        android:exported="true"
+        android:exported="false"
         android:stateNotNeeded="true"
         android:theme="@style/Theme.PlayCore.Transparent" />
-  ```
-
-**Delphi 12.0 or earlier:**
-
-Please refer to the Build Events section of the Project Options. There are two commands in a Post-Build event:
-
-* Merge `AndroidManifest.template.xml` using the `manifestmerge` tool in the Tools folder of Kastri
-* If Delphi generates a `styles.xml` file (as it does when you enable the splash screen), the file `Resources\styles.merge.xml` is merged (using `resmerge` in the Tools folder) with the Delphi generated file into the `Resources\Overrides\res\values` folder. This file is included in the Deployment (see Deployment section below)
-
-**You may need to modify these commands to suit your environment**.
-
-### Deployment
-
-As per the Build Events section above, the merged `styles.xml` is added to the deployment. As this file is an "override", the Delphi generated styles.xml deployment **needs to be disabled** (if one exists): 
-
-<img src="Screenshots/Deployment.png" alt="logo" height="200">
+   ```
+1. Copy `styles.xml` and `styles-v21.xml` from the project output folder to the `Resources\Overrides\res\values` folder
+2. Modify **each** of these files to add this style inside the `<resources>` tag:
+   ```
+    <style name="Theme.PlayCore.Transparent" parent="android:Theme">
+      <item name="android:windowIsTranslucent">true</item>
+      <item name="android:windowBackground">@android:color/transparent</item>
+      <item name="android:windowContentOverlay">@null</item>
+      <item name="android:windowNoTitle">true</item>
+      <item name="android:windowIsFloating">true</item>
+      <item name="android:backgroundDimEnabled">false</item>
+    </style>
+    ```
+3. If you are creating your own project, these files will need to be added to the deployment (they are already added in the demo), for the target platforms (i.e. Android 32-bit and Android 64-bit) and configurations (e.g. Debug and Release). See the next step for an illustration of the required entries
+4. As these files are an "override", the **Delphi generated styles** deployment files **need to be disabled**, e.g. for Android 64-bit (All configurations):
+   
+   <img src="Screenshots/Deployment.png" alt="logo" height="200">
+5. Redeploy the app
 
 ## Thanks
 
-Thanks to Igor Costa who helped with testing and provided valuable feedback
+Thanks to Igor Costa who helped with testing and provided valuable feedback, on a number of occasions!
 
 
 

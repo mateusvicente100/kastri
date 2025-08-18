@@ -160,6 +160,7 @@ type
     procedure PipeErrorFileHandleForReadingReadabilityHandler(AFile: NSFileHandle);
     procedure PipeOutputFileHandleForReadingReadabilityHandler(AFile: NSFileHandle);
     procedure TaskTerminationHandler(task: NSTask);
+    procedure SetCmdLine(const Value: string);
   protected
     function GetIsRunning: Boolean; override;
   public
@@ -168,7 +169,7 @@ type
     function Run: Boolean; override;
     function RunAndWait(const ATimeout: Cardinal = 0): Integer; override;
     procedure Terminate; override;
-    property CommandLine: string read FCmdLine write FCmdLine;
+    property CommandLine: string read FCmdLine write SetCmdLine;
     property IsTerminated: Boolean read FIsTerminated;
     property Params: string read FParams write FParams;
     property OnProcessOutput;
@@ -176,8 +177,11 @@ type
   end;
 
   TRunProcessSync = record
+  private
+    class function InternalRun(const ACmd, AParams: string; var AOutput: string; const ACurrentDir, AOutputFileName: string): Integer; static;
   public
     class function Run(const ACmd, AParams: string; var AOutput: string; const ACurrentDir: string = ''): Integer; static;
+    class function RunRedir(const ACmd, AParams: string; const AOutputFileName: string; const ACurrentDir: string = ''): Integer; static;
   end;
 
 implementation
@@ -262,7 +266,7 @@ var
   LOutput: string;
   LString: NSString;
 begin
-  if not FIsTerminated then
+  if not FIsTerminated and OutputFileName.IsEmpty then
   begin
     LString := TNSString.Wrap(TNSString.OCClass.alloc);
     LOutput := NSStrToStr(TNSString.Wrap(LString.initWithData(AFile.availableData, NSUTF8StringEncoding)));
@@ -294,12 +298,26 @@ begin
       TOSLog.d('FTask.launchAndReturnError returned FALSE');
   end
   else
-    TOSLog.d('isExecutableFileAtPath is FALSE');
+    TOSLog.d('isExecutableFileAtPath for "%s" is FALSE', [FCmdLine]);
 end;
 
 function TRunProcess.RunAndWait(const ATimeout: Cardinal = 0): Integer;
 begin
   Result := -1; // Has problems on macOS - use TRunProcessSynch
+end;
+
+procedure TRunProcess.SetCmdLine(const Value: string);
+var
+  LParts: TArray<string>;
+begin
+  LParts := Value.Split([' '], '"');
+  if Length(LParts) > 1 then
+  begin
+    FCmdLine := LParts[0];
+    FParams := Value.Substring(Length(LParts[0])).Trim;
+  end
+  else
+    FCmdLine := Value;
 end;
 
 procedure TRunProcess.TaskTerminationHandler(task: NSTask);
@@ -312,6 +330,8 @@ begin
       LStatus := task.terminationStatus
     else
       LStatus := -1;
+    if not OutputFileName.IsEmpty then
+      FPipeOutput.fileHandleForReading.readDataToEndOfFile.writeToFile(StrToNSStr(OutputFileName), True);
     DestroyTask;
     DoTerminated(LStatus);
   end;
@@ -328,7 +348,7 @@ end;
 
 { TRunProcessSync }
 
-class function TRunProcessSync.Run(const ACmd, AParams: string; var AOutput: string; const ACurrentDir: string = ''): Integer;
+class function TRunProcessSync.InternalRun(const ACmd, AParams: string; var AOutput: string; const ACurrentDir, AOutputFileName: string): Integer;
 var
   LTask: NSTask;
   {LInPipe, } LOutPipe, LErrorPipe: NSPipe;
@@ -343,6 +363,8 @@ begin
     try
       LTask := TNSTask.Create;
       try
+        if not ACurrentDir.IsEmpty then
+          LTask.setCurrentDirectoryPath(StrToNSStr(ACurrentDir));
         LTask.setExecutableURL(TNSURL.Wrap(TNSURL.OCClass.fileURLWithPath(StrToNSStr(ACmd))));
         if not AParams.IsEmpty then
           LTask.setArguments(StringArrayToNSArray(AParams.Split([' '], '"'), True));
@@ -358,16 +380,33 @@ begin
       finally
         LTask.release;
       end;
-      LOutput := TNSString.Wrap(TNSString.OCClass.alloc);
-      AOutput := NSStrToStr(TNSString.Wrap(LOutput.initWithData(LOutPipe.fileHandleForReading.readDataToEndOfFile, NSUTF8StringEncoding)));
-      if (Result <> 0) and AOutput.IsEmpty then
-        AOutput := NSStrToStr(TNSString.Wrap(LOutput.initWithData(LErrorPipe.fileHandleForReading.readDataToEndOfFile, NSUTF8StringEncoding)));
+      if AOutputFileName.IsEmpty then
+      begin
+        LOutput := TNSString.Wrap(TNSString.OCClass.alloc);
+        AOutput := NSStrToStr(TNSString.Wrap(LOutput.initWithData(LOutPipe.fileHandleForReading.readDataToEndOfFile, NSUTF8StringEncoding)));
+        if (Result <> 0) and AOutput.IsEmpty then
+          AOutput := NSStrToStr(TNSString.Wrap(LOutput.initWithData(LErrorPipe.fileHandleForReading.readDataToEndOfFile, NSUTF8StringEncoding)));
+      end
+      else
+        LOutPipe.fileHandleForReading.readDataToEndOfFile.writeToFile(StrToNSStr(AOutputFileName), True);
     finally
       LErrorPipe.release;
     end;
   finally
     LOutPipe.release;
   end;
+end;
+
+class function TRunProcessSync.Run(const ACmd, AParams: string; var AOutput: string; const ACurrentDir: string = ''): Integer;
+begin
+  Result := InternalRun(ACmd, AParams, AOutput, ACurrentDir, '');
+end;
+
+class function TRunProcessSync.RunRedir(const ACmd, AParams: string; const AOutputFileName, ACurrentDir: string): Integer;
+var
+  LOutput: string;
+begin
+  Result := InternalRun(ACmd, AParams, LOutput, ACurrentDir, AOutputFileName);
 end;
 
 end.

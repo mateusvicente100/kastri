@@ -31,6 +31,7 @@ type
   TAndroidHelperEx = record
   private
     class var FAlarmManager: JAlarmManager;
+    class var FAudioManager: JAudioManager;
     class var FKeyguardManager: JKeyguardManager;
     class var FNotificationManager: JNotificationManager;
     class var FPowerManager: JPowerManager;
@@ -59,13 +60,22 @@ type
       OREO_MR1 = 27;
       PIE = 28;
       Q = 29;
-      UPSIDE_DOWN_CAKE = 0;
+      R = 30;
+      S = 31;
+      S_V2 = 32;
+      TIRAMISU = 33;
+      UPSIDE_DOWN_CAKE = 34;
     /// <summary>
     ///   Returns the alarm manager
     /// </summary>
     class function AlarmManager: JAlarmManager; static;
     /// <summary>
+    ///   Returns the audio manager
+    /// </summary>
+    class function AudioManager: JAudioManager; static;
+    /// <summary>
     ///   Determines whether or not exact alarms can be scheduled. Applies to Android 14+
+    /// </summary>
     class function CanScheduleExactAlarms: Boolean; static;
     /// <summary>
     ///   Checks if both build and target are greater or equal to the tested value
@@ -119,6 +129,13 @@ type
     /// </remarks>
     class function HasClass(const AClassName: string; const ALibraryName: string = ''): Boolean; overload; static;
     class function HasClass(const ATypeInfo: PTypeInfo; const ALibraryName: string = ''): Boolean; overload; static;
+    /// <summary>
+    ///   Determines whether an app is able to have notification sounds whilst the device is in DND mode
+    /// </summary>
+    /// <remarks>
+    ///   See also ShowDoNotDisturbSettings
+    /// </remarks>
+    class function HasDoNotDisturbAccess: Boolean; static;
     /// <summary>
     ///   Returns whether the application has the specified permission declared in the manifest
     /// </summary>
@@ -223,6 +240,13 @@ type
     ///   See also NeedsAllFilesAccessPermission
     /// </remarks>
     class function ShowAllFilesAccessPermissionSettings: Boolean; static;
+    /// <summary>
+    ///   Shows the Do Not Disturb settings
+    /// </summary>
+    /// <remarks>
+    ///   In order for an app to have DND enabled, it must enable the Access Notification Policy permission
+    /// </remarks>
+    class function ShowDoNotDisturbSettings: Boolean; static;
     /// <summary>
     ///   Shows the exact alarms permissions activity if they are yet to be enabled
     /// </summary>
@@ -348,6 +372,12 @@ type
 
   TAndroidFileStream = class(TBytesStream)
   public
+    /// <summary>
+    ///   Copies a file from the specified URI to the destination filename
+    /// </summary>
+    class function Copy(const AURI, AFileName: string): Boolean; overload;
+    class function Copy(const AJURI: Jnet_Uri; const AFileName: string): Boolean; overload;
+  public
     constructor Create(const AFile: JFile); overload;
     constructor Create(const AURI: string); overload;
     constructor Create(const AJURI: Jnet_Uri); overload;
@@ -427,6 +457,19 @@ begin
       FAlarmManager := TJAlarmManager.Wrap(LService);
   end;
   Result := FAlarmManager;
+end;
+
+class function TAndroidHelperEx.AudioManager: JAudioManager;
+var
+  LService: JObject;
+begin
+  if FAudioManager = nil then
+  begin
+    LService := TAndroidHelper.Context.getSystemService(TJContext.JavaClass.ALARM_SERVICE);
+    if LService <> nil then
+      FAudioManager := TJAudioManager.Wrap(LService);
+  end;
+  Result := FAudioManager;
 end;
 
 class function TAndroidHelperEx.CanScheduleExactAlarms: Boolean;
@@ -517,6 +560,13 @@ begin
   end;
   if not LClassName.IsEmpty then
     Result := HasClass(LClassName, ALibraryName);
+end;
+
+class function TAndroidHelperEx.HasDoNotDisturbAccess: Boolean;
+begin
+  Result := True;
+  if TOSVersion.Check(6) then
+    Result := NotificationManager.isNotificationPolicyAccessGranted;
 end;
 
 class function TAndroidHelperEx.HasManifestPermission(const APermission: string): Boolean;
@@ -685,7 +735,10 @@ begin
   begin
     LServiceInfo := TJActivityManager_RunningServiceInfo.Wrap(TAndroidHelper.JObjectToID(LRunningServices.get(I)));
     if LServiceName.Equals(JStringToString(LServiceInfo.service.getClassName)) then
-      Exit(LServiceInfo);
+    begin
+      Result := LServiceInfo;
+      Break;
+    end;
   end;
 end;
 
@@ -908,6 +961,19 @@ begin
   LUri := TJnet_Uri.JavaClass.fromParts(StringToJString('package'), TAndroidHelper.Context.getPackageName, nil);
   LIntent := TJIntent.JavaClass.init(TJSettings.JavaClass.ACTION_APPLICATION_DETAILS_SETTINGS, LUri);
   TAndroidHelper.Context.startActivity(LIntent);
+end;
+
+class function TAndroidHelperEx.ShowDoNotDisturbSettings: Boolean;
+var
+  LIntent: JIntent;
+begin
+  Result := False;
+  if not HasDoNotDisturbAccess then
+  begin
+    LIntent := TJIntent.JavaClass.init(TJSettings.JavaClass.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+    TAndroidHelper.Context.startActivity(LIntent);
+    Result := True;
+  end;
 end;
 
 { TJImageHelper }
@@ -1143,20 +1209,77 @@ begin
   Create(LURI);
 end;
 
+class function TAndroidFileStream.Copy(const AJURI: Jnet_Uri; const AFileName: string): Boolean;
+var
+  LInputStream: JInputStream;
+  LOutputStream: JFileOutputStream;
+  LInputChannel: JReadableByteChannel;
+  LOutputChannel: JFileChannel;
+begin
+  Result := False;
+  LInputStream := TAndroidHelper.Context.getContentResolver.openInputStream(AJURI);
+  if LInputStream <> nil then
+  try
+    LOutputStream := TJFileOutputStream.JavaClass.init(StringToJString(AFileName));
+    if LOutputStream <> nil then
+    try
+      LInputChannel := TJChannels.JavaClass.newChannel(LInputStream);
+      if LInputChannel <> nil then
+      try
+        LOutputChannel := LOutputStream.getChannel;
+        if LOutputChannel <> nil then
+        try
+          LOutputStream.getChannel.transferFrom(LInputChannel, 0, Int64.MaxValue);
+          Result := True;
+        finally
+          LOutputChannel.close;
+        end;
+      finally
+        LInputChannel.close;
+      end;
+    finally
+      LOutputStream.close;
+    end;
+  finally
+    LInputStream.close;
+  end;
+end;
+
+class function TAndroidFileStream.Copy(const AURI, AFileName: string): Boolean;
+var
+  LURI: Jnet_Uri;
+begin
+  LURI := TJnet_Uri.JavaClass.parse(StringToJString(AURI));
+  Result := Copy(LURI, AFileName);
+end;
+
 constructor TAndroidFileStream.Create(const AJURI: Jnet_Uri);
 var
   LInput: JInputStream;
   LJavaBytes: TJavaArray<Byte>;
   LBytes: TBytes;
+  LBytesRead, LOffset: Integer;
 begin
+  LBytes := [];
   LInput := TAndroidHelper.Context.getContentResolver.openInputStream(AJURI);
-  LJavaBytes := TJavaArray<Byte>.Create(LInput.available);
+  if LInput <> nil then
   try
-    LInput.read(LJavaBytes, 0, LJavaBytes.Length);
-    SetLength(LBytes, LJavaBytes.Length);
-    Move(LJavaBytes.Data^, LBytes[0], LJavaBytes.Length);
+    LJavaBytes := TJavaArray<Byte>.Create(4096);
+    try
+      repeat
+        LBytesRead := LInput.read(LJavaBytes, 0, LJavaBytes.Length);
+        if LBytesRead > 0 then
+        begin
+          LOffset := Length(LBytes);
+          SetLength(LBytes, Length(LBytes) + LBytesRead);
+          Move(LJavaBytes.Data^, LBytes[LOffset], LBytesRead);
+        end;
+      until LBytesRead <= 0;
+    finally
+      LJavaBytes.Free;
+    end;
   finally
-    LJavaBytes.Free;
+    LInput.close;
   end;
   inherited Create(LBytes);
 end;

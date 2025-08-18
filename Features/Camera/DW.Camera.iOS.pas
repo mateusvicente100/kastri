@@ -6,12 +6,10 @@ unit DW.Camera.iOS;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2023 Dave Nottage under MIT license   }
+{  Copyright 2020-2025 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
@@ -181,6 +179,11 @@ end;
 function AVVideoCodecJPEG: NSString;
 begin
   Result := CocoaNSStringConst(libAVFoundation, 'AVVideoCodecJPEG');
+end;
+
+function AVCaptureISOCurrent: CGFloat;
+begin
+  Result := CocoaDoubleConst(libAVFoundation, 'AVCaptureISOCurrent');
 end;
 
 type
@@ -492,12 +495,16 @@ var
   LISO: Single;
 begin
   LDevice := TAVCaptureDeviceEx.Wrap(NSObjectToID(FDevice));
-  LFormat := TAVCaptureDeviceFormatEx.Wrap(NSObjectToID(FDevice.activeFormat));
-  if Exposure > -1 then
-    LISO := LFormat.minISO + (Exposure * (LFormat.maxISO - LFormat.minISO))
-  else
-    LISO := FISODefault;
-  LDevice.setExposureModeCustomWithDuration(LDevice.exposureDuration, LISO, nil);
+  if LDevice.activeFormat <> nil then
+  begin
+    LFormat := TAVCaptureDeviceFormatEx.Wrap(NSObjectToID(LDevice.activeFormat));
+    if Exposure > -1 then
+      LISO := LFormat.minISO + (Exposure * (LFormat.maxISO - LFormat.minISO))
+    else
+      LISO := FISODefault;
+    if (LISO >= LFormat.minISO) and (LISO <= LFormat.maxISO) then
+      LDevice.setExposureModeCustomWithDuration(LDevice.exposureDuration, LISO, nil);
+  end;
 end;
 
 procedure TPlatformCamera.UpdateExposureValue;
@@ -506,10 +513,13 @@ var
   LFormat: AVCaptureDeviceFormatEx;
 begin
   LDevice := TAVCaptureDeviceEx.Wrap(NSObjectToID(FDevice));
-  LFormat := TAVCaptureDeviceFormatEx.Wrap(NSObjectToID(FDevice.activeFormat));
-  if FISODefault = -1 then
-    FISODefault := LDevice.ISO;
-  InternalSetExposure((FISODefault - LFormat.minISO) / (LFormat.maxISO - LFormat.minISO));
+  if LDevice.activeFormat <> nil then
+  begin
+    LFormat := TAVCaptureDeviceFormatEx.Wrap(NSObjectToID(LDevice.activeFormat));
+    if FISODefault = -1 then
+      FISODefault := LDevice.ISO;
+    InternalSetExposure((FISODefault - LFormat.minISO) / (LFormat.maxISO - LFormat.minISO));
+  end;
 end;
 
 procedure TPlatformCamera.UpdateFlashMode;
@@ -572,16 +582,19 @@ var
 begin
   FDevice := nil;
   LDevices := TAVCaptureDevice.OCClass.devicesWithMediaType(AVMediaTypeVideo);
-  for I := 0 to LDevices.count - 1 do
+  if LDevices.count > 0 then
   begin
-    LDevice := TAVCaptureDevice.Wrap(LDevices.objectAtIndex(I));
-    case CameraPosition of
-      TDevicePosition.Back:
-        if LDevice.position = AVCaptureDevicePositionBack then
-          FDevice := LDevice;
-      TDevicePosition.Front:
-        if LDevice.position = AVCaptureDevicePositionFront then
-          FDevice := LDevice;
+    for I := 0 to LDevices.count - 1 do
+    begin
+      LDevice := TAVCaptureDevice.Wrap(LDevices.objectAtIndex(I));
+      case CameraPosition of
+        TDevicePosition.Back:
+          if LDevice.position = AVCaptureDevicePositionBack then
+            FDevice := LDevice;
+        TDevicePosition.Front:
+          if LDevice.position = AVCaptureDevicePositionFront then
+            FDevice := LDevice;
+      end;
     end;
   end;
   if FDevice <> nil then

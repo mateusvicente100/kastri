@@ -75,15 +75,19 @@ type
     FClickAction: string;
     FData: string;
     FImageURL: string;
+    FIsCritical: Boolean;
     FIsDataOnly: Boolean;
+    FIsSilent: Boolean;
     FOptions: TFCMMessageOptions;
     FPriority: TFCMMessagePriority;
     FSoundName: string;
+    FSoundVolume: Single;
     FTitle: string;
     function GetAndroidJSONValue: TJSONValue;
     function GetAndroidNotificationJSONValue: TJSONValue;
     function GetAPNSJSONValue: TJSONValue;
     function GetDataJSONValue: TJSONValue;
+    procedure SetSoundVolume(const Value: Single);
   public
     constructor Create;
     function GetPayload(const ATo: string; const AIsTopic: Boolean): string;
@@ -95,12 +99,35 @@ type
     property Body: string read FBody write FBody;
     property ChannelID: string read FChannelID write FChannelID;
     property ClickAction: string read FClickAction write FClickAction;
+    /// <summary>
+    ///   Additional information to include in the data member of the payload. Needs to be valid JSON, with string properties *only*
+    /// </summary>
     property Data: string read FData write FData;
+    /// <summary>
+    ///   Used by the Kastri client-side implementation of FCM to display an optional image with the notification
+    /// </summary>
     property ImageURL: string read FImageURL write FImageURL;
+    /// <summary>
+    ///   Indicates that the message is critical - currently applies to iOS only
+    /// </summary>
+    property IsCritical: Boolean read FIsCritical write FIsCritical;
+    /// <summary>
+    ///   Indicates whether or not a notification member should be included in the Android part of the payload
+    /// </summary>
+    /// <remarks>
+    ///   This should be set to True if the Kastri client-side implementation of FCM for Android is being used, so that messages can be handled
+    ///   in both the *background* and foreground. Please see this link for further explanation:
+    ///     https://firebase.google.com/docs/cloud-messaging/android/receive
+    /// </remarks>
     property IsDataOnly: Boolean read FIsDataOnly write FIsDataOnly;
+    /// <summary>
+    ///   Used by the Kastri client-side implementation of FCM to indicate that a notification should not be shown
+    /// </summary>
+    property IsSilent: Boolean read FIsSilent write FIsSilent;
     property Options: TFCMMessageOptions read FOptions write FOptions;
     property Priority: TFCMMessagePriority read FPriority write FPriority;
     property SoundName: string read FSoundName write FSoundName;
+    property SoundVolume: Single read FSoundVolume write SetSoundVolume;
     property Title: string read FTitle write FTitle;
   end;
 
@@ -120,8 +147,9 @@ type
   TFCMSenderErrorEvent = procedure(Sender: TObject; const Error: TFCMSenderError) of object;
 
   TFCMSenderResponse = record
+    Request: string;
     Response: string;
-    constructor Create(const AResponse: string);
+    constructor Create(const ARequest, AResponse: string);
   end;
 
   TFCMSenderResponseEvent = procedure(Sender: TObject; const Response: TFCMSenderResponse) of object;
@@ -152,7 +180,7 @@ type
     function LoadServiceAccount(const AFileName: string): Boolean;
     function Post(const AJSON: string): Boolean;
     property BearerToken: TBearerToken read FBearerToken;
-    property ServiceAccount: TServiceAccount read FServiceAccount;
+    property ServiceAccount: TServiceAccount read FServiceAccount write FServiceAccount;
     property OnError: TFCMSenderErrorEvent read FOnError write FOnError;
     property OnNewAccessToken: TNotifyEvent read FOnNewAccessToken write FOnNewAccessToken;
     property OnResponse: TFCMSenderResponseEvent read FOnResponse write FOnResponse;
@@ -172,7 +200,7 @@ implementation
 uses
   // RTL
   System.SysUtils, System.DateUtils, System.Net.HttpClient, System.Net.URLClient, System.NetEncoding,  System.NetConsts,
-  System.Hash, System.IOUtils, System.TypInfo,
+  System.Hash, System.IOUtils, System.TypInfo, System.Generics.Collections,
   // Grijjy - from: https://github.com/grijjy/DelphiOpenSsl/blob/master/OpenSSL.Api_11.pas
   OpenSSL.Api_11;
 
@@ -415,31 +443,48 @@ begin
   FImageURL := '';
   FOptions := [];
   FSoundName := '';
+  FIsCritical := False;
+  FSoundVolume := -1;
+end;
+
+procedure TFCMMessage.SetSoundVolume(const Value: Single);
+begin
+  FSoundVolume := Value;
 end;
 
 // https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/generating_a_remote_notification?language=objc#2943363
 //   See Table 1
 function TFCMMessage.GetAPNSJSONValue: TJSONValue;
 var
-  LAPNS, LPayload, LAPS, LAlert, LDataValue: TJSONObject;
-  LHasAPS: Boolean;
+  LAPNS, LPayload, LAPS, LAlert, LDataValue, LSoundValue: TJSONObject;
+  LNeedsAPNS: Boolean;
   I: Integer;
   LPair: TJSONPair;
 begin
   Result := nil;
-  LHasAPS := False;
+  LNeedsAPNS := False;
   LAPNS := TJSONObject.Create;
   try
     LPayload := TJSONObject.Create;
     LAPNS.AddPair('payload', LPayload);
     LAPS := TJSONObject.Create;
     LPayload.AddPair('aps', LAPS);
-    if not FSoundName.IsEmpty then
-      LAPS.AddPair('sound', FSoundName);
+    if not FSoundName.IsEmpty or FIsCritical then
+    begin
+      LSoundValue := TJSONObject.Create;
+      LSoundValue.AddPair('critical', Ord(FIsCritical));
+      if FSoundName.IsEmpty then
+        LSoundValue.AddPair('name', 'default')
+      else
+        LSoundValue.AddPair('name', FSoundName);
+      if FSoundVolume = -1 then
+        LSoundValue.AddPair('volume', 1)
+      else
+        LSoundValue.AddPair('volume', FSoundVolume);
+      LAPS.AddPair('sound', LSoundValue);
+    end;
     if FBadgeCount >= 0 then
       LAPS.AddPair('badge', TJSONNumber.Create(FBadgeCount));
-    if TFCMMessageOption.ContentAvailable in FOptions then
-      LAPS.AddPair('content-available', TJSONNumber.Create(1));
     // "Data only" notifications need an APS alert member
     if FIsDataOnly then
     begin
@@ -448,6 +493,10 @@ begin
       LAlert.AddPair('body', TJSONString.Create(FBody));
       LAPS.AddPair('alert', LAlert);
     end;
+    if TFCMMessageOption.ContentAvailable in FOptions then
+      LAPS.AddPair('content-available', TJSONNumber.Create(1));
+    if not FClickAction.IsEmpty then
+      LAPS.AddPair('category', FClickAction);
     // Add any data JSON values to the APS member
     if not FData.IsEmpty then
     begin
@@ -466,9 +515,12 @@ begin
     // Add this LAST
     if LAPS.Count > 0 then
       LAPS.AddPair('mutable-content', TJSONNumber.Create(1));
-    LHasAPS := LAPS.Count > 0;
+    // imageUrl is used in FCM handling code in Kastri
+    if not FImageURL.IsEmpty then
+      LPayload.AddPair('imageUrl', FImageURL);
+    LNeedsAPNS := (LPayload.Count > 0) or (LAPS.Count > 0);
   finally
-    if LHasAPS then
+    if LNeedsAPNS then
       Result := LAPNS
     else
       LAPNS.Free;
@@ -494,10 +546,14 @@ begin
       LData.AddPair('big_text', '1');
     if not FImageURL.IsEmpty and (TFCMMessageOption.BigImage in FOptions) then
       LData.AddPair('big_image', '1');
+    if IsSilent then
+      LData.AddPair('isSilent', '1');
     if FIsDataOnly then
     begin
       LData.AddPair('title', TJSONString.Create(FTitle));
       LData.AddPair('body', TJSONString.Create(FBody));
+      if not FChannelID.IsEmpty then
+        LData.AddPair('channel_id', FChannelID);
       // imageUrl is used in FCM handling code in Kastri
       if not FImageURL.IsEmpty then
         LData.AddPair('imageUrl', TJSONString.Create(FImageURL));
@@ -552,9 +608,12 @@ begin
   try
     if Ord(FPriority) > 0 then
      LAndroid.AddPair('priority', cFCMMessagePriorityValues[FPriority]);
-    LNotification := GetAndroidNotificationJSONValue;
-    if LNotification <> nil then
-      LAndroid.AddPair('notification', LNotification);
+    if not IsDataOnly then
+    begin
+      LNotification := GetAndroidNotificationJSONValue;
+      if LNotification <> nil then
+        LAndroid.AddPair('notification', LNotification);
+    end;
     LHasProps := LAndroid.Count > 0;
   finally
     if LHasProps then
@@ -624,8 +683,9 @@ end;
 
 { TFCMSenderResponse }
 
-constructor TFCMSenderResponse.Create(const AResponse: string);
+constructor TFCMSenderResponse.Create(const ARequest, AResponse: string);
 begin
+  Request := ARequest;
   Response := AResponse;
 end;
 
@@ -763,7 +823,7 @@ begin
       DoError(TFCMSenderError.Create(TFCMSenderErrorKind.PostFailure, AJSON, LErrorMessage));
     end
     else
-      DoResponse(TFCMSenderResponse.Create(LResponse.ContentAsString));
+      DoResponse(TFCMSenderResponse.Create(AJSON, LResponse.ContentAsString));
   finally
     LHTTP.Free;
   end;
